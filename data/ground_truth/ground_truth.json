@@ -22,5 +22,13 @@
     "issue_type": "DOWNTIME_OVERLAPS_PLANNED_BREAK",
     "record_id": "EVT-ANOMALY-BREAK-000001",
     "expected_decision": "FLAG_DOWNTIME_BREAK_OVERLAP"
+  },
+  {
+    "anomaly_id": "GT-005",
+    "issue_type": "WRONG_IDEAL_CYCLE_TIME",
+    "record_id": "PROD-001",
+    "expected_ideal_cycle_time_seconds": 20,
+    "actual_ideal_cycle_time_seconds": 30,
+    "expected_decision": "FLAG_WRONG_IDEAL_CYCLE_TIME"
   }
 ]

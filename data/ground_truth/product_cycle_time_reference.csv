@@ -1,0 +1,21 @@
+product_id,name,ideal_cycle_time_seconds
+PROD-001,Product 1,20
+PROD-002,Product 2,20
+PROD-003,Product 3,15
+PROD-004,Product 4,10
+PROD-005,Product 5,15
+PROD-006,Product 6,15
+PROD-007,Product 7,15
+PROD-008,Product 8,10
+PROD-009,Product 9,15
+PROD-010,Product 10,10
+PROD-011,Product 11,15
+PROD-012,Product 12,15
+PROD-013,Product 13,20
+PROD-014,Product 14,10
+PROD-015,Product 15,15
+PROD-016,Product 16,15
+PROD-017,Product 17,10
+PROD-018,Product 18,15
+PROD-019,Product 19,30
+PROD-020,Product 20,10

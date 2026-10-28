@@ -1,5 +1,5 @@
 product_id,name,ideal_cycle_time_seconds
-PROD-001,Product 1,20
+PROD-001,Product 1,30
 PROD-002,Product 2,20
 PROD-003,Product 3,15
 PROD-004,Product 4,10

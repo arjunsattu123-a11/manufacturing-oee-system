@@ -27,6 +27,7 @@ def main():
     counts = read_csv("production_counts.csv")
     planned_breaks = read_csv("planned_breaks.csv")
     products = read_csv("products.csv")
+    expected_products = read_csv("../ground_truth/product_cycle_time_reference.csv")
 
     # 1. Detect overlapping machine states
     overlap_anomalies = detect_overlapping_states(events)
@@ -98,7 +99,9 @@ def main():
     )
 
     # 5. Detect invalid ideal cycle times
-    cycle_time_anomalies = detect_invalid_cycle_times(products)
+    cycle_time_anomalies = detect_invalid_cycle_times(
+        products, expected_products
+    )
 
     # 6. Load ground-truth labels
     with GROUND_TRUTH_FILE.open("r", encoding="utf-8") as file:
