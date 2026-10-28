@@ -200,7 +200,3 @@ To establish reproducibility, generate data from a clean state twice using the s
 ## 13. License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## 13. License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
