@@ -16,5 +16,11 @@
     "issue_type": "COUNT_DECREASE_WITHOUT_CORRECTION",
     "record_id": "CNT-ANOMALY-DECREASE-000002",
     "expected_decision": "FLAG_COUNT_DECREASE"
+  },
+  {
+    "anomaly_id": "GT-004",
+    "issue_type": "DOWNTIME_OVERLAPS_PLANNED_BREAK",
+    "record_id": "EVT-ANOMALY-BREAK-000001",
+    "expected_decision": "FLAG_DOWNTIME_BREAK_OVERLAP"
   }
 ]

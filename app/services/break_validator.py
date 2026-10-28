@@ -9,22 +9,34 @@ def detect_downtime_during_break(
     anomalies = []
 
     for planned_break in planned_breaks:
-        break_start = datetime.fromisoformat(
-            planned_break["start_time"]
-        )
-        break_end = datetime.fromisoformat(
-            planned_break["end_time"]
-        )
+        try:
+            break_start = datetime.fromisoformat(
+                planned_break["start_time"]
+            )
+            break_end = datetime.fromisoformat(
+                planned_break["end_time"]
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
 
         if break_end <= break_start:
             continue
 
         for event in state_events:
-            if event["state"].upper() not in {"STOPPED", "IDLE"}:
+            if event.get("state", "").upper() not in {
+                "STOPPED", "IDLE"
+            }:
                 continue
 
-            event_start = datetime.fromisoformat(event["start_time"])
-            event_end = datetime.fromisoformat(event["end_time"])
+            try:
+                event_start = datetime.fromisoformat(
+                    event["start_time"]
+                )
+                event_end = datetime.fromisoformat(
+                    event["end_time"]
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
 
             if event_end <= event_start:
                 continue

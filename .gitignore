@@ -25,3 +25,6 @@ Thumbs.db
 
 *.backup
 *.before_coverage_fix
+# Local reproducibility backups
+data_backup_before_reproducibility/
+data/raw/state_events_before_break_fix.csv
