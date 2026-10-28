@@ -11,20 +11,19 @@ venv/
 # Local database and secrets
 *.db
 .env
+.env.*
 
 # Temporary and backup datasets
 data/repro_test/
 data/raw_backup/
 data/raw_repro_backup/
+data_backup_before_reproducibility/
+data/raw/state_events_before_break_fix.csv
 generator/*.backup
+*.backup
+*.before_coverage_fix
 
 # Editor and operating system
 .vscode/
 .DS_Store
 Thumbs.db
-
-*.backup
-*.before_coverage_fix
-# Local reproducibility backups
-data_backup_before_reproducibility/
-data/raw/state_events_before_break_fix.csv
