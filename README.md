@@ -93,6 +93,8 @@ The project includes examples of:
 - Overlapping machine state events
 - Invalid scrap quantities
 - Production count decreases without correction events
+- Downtime overlapping planned breaks
+- Wrong ideal cycle time compared with a trusted reference
 
 After generating clean data, inject the labelled examples:
 
@@ -190,7 +192,7 @@ To establish reproducibility, generate data from a clean state twice using the s
 
 - Add explicit shift end times and planned production time.
 - Align production counts and quality inspections to their actual timestamps, machine, order, and shift.
-- Validate machine-product ideal cycle-time mappings.
+- Validate machine-product ideal cycle-time mappings against trusted reference data.
 - Associate planned breaks with the correct machines and shifts.
 - Improve cumulative count and correction-event modeling.
 - Add checksum-based reproducibility tests.
