@@ -22,3 +22,6 @@ generator/*.backup
 .vscode/
 .DS_Store
 Thumbs.db
+
+*.backup
+*.before_coverage_fix
