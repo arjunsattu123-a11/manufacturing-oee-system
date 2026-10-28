@@ -1,0 +1,445 @@
+
+import argparse
+import csv
+import json
+from collections import defaultdict
+from datetime import datetime, timedelta
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+RAW_DIR = BASE_DIR / "data" / "raw"
+PROCESSED_DIR = BASE_DIR / "data" / "processed"
+SHIFT_HOURS = 8
+BREAKS_FILE = "planned_breaks.csv"
+
+
+def configure_directories():
+    global RAW_DIR, PROCESSED_DIR
+
+    parser = argparse.ArgumentParser(
+        description="Manufacturing OEE report"
+    )
+    parser.add_argument(
+        "--data-dir",
+        default=str(BASE_DIR / "data" / "raw"),
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=str(BASE_DIR / "data" / "processed"),
+    )
+
+    args = parser.parse_args()
+    RAW_DIR = Path(args.data_dir)
+    PROCESSED_DIR = Path(args.output_dir)
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def read_csv(filename):
+    path = RAW_DIR / filename
+    with path.open("r", newline="", encoding="utf-8") as file:
+        return list(csv.DictReader(file))
+
+
+def parse_time(value):
+    return datetime.fromisoformat(value)
+
+
+def union_seconds_in_window(intervals, window_start, window_end):
+    """Calculate interval-union duration without double-counting overlaps."""
+    clipped = []
+
+    for start, end in intervals:
+        start = max(start, window_start)
+        end = min(end, window_end)
+
+        if end > start:
+            clipped.append((start, end))
+
+    if not clipped:
+        return 0.0
+
+    clipped.sort(key=lambda interval: interval[0])
+    merged_start, merged_end = clipped[0]
+    total_seconds = 0.0
+
+    for start, end in clipped[1:]:
+        if start <= merged_end:
+            merged_end = max(merged_end, end)
+        else:
+            total_seconds += (
+                merged_end - merged_start
+            ).total_seconds()
+            merged_start, merged_end = start, end
+
+    total_seconds += (
+        merged_end - merged_start
+    ).total_seconds()
+
+    return total_seconds
+
+
+def net_planned_seconds(shift_start, shift_end, breaks):
+    """Subtract the union of valid planned breaks from shift duration."""
+    duration = (shift_end - shift_start).total_seconds()
+    break_seconds = union_seconds_in_window(
+        breaks, shift_start, shift_end
+    )
+    return max(0.0, duration - break_seconds)
+
+
+def calculate_metrics(
+    planned_seconds,
+    run_seconds,
+    total,
+    good,
+    ideal_seconds,
+):
+    availability = (
+        run_seconds / planned_seconds if planned_seconds > 0 else 0.0
+    )
+    performance = (
+        ideal_seconds / run_seconds if run_seconds > 0 else 0.0
+    )
+    quality = good / total if total > 0 else 0.0
+    oee = availability * performance * quality
+
+    return {
+        "availability": round(availability, 4),
+        "performance": round(performance, 4),
+        "quality": round(quality, 4),
+        "oee": round(oee, 4),
+    }
+
+
+def main():
+    machines = read_csv("machines.csv")
+    products = read_csv("products.csv")
+    orders = read_csv("production_orders.csv")
+    counts = read_csv("production_counts.csv")
+    events = read_csv("state_events.csv")
+    shifts = read_csv("shifts.csv")
+    planned_breaks = read_csv(BREAKS_FILE)
+
+    machine_by_id = {row["machine_id"]: row for row in machines}
+    product_by_id = {row["product_id"]: row for row in products}
+    order_by_id = {row["order_id"]: row for row in orders}
+
+    for product in products:
+        cycle = float(product["ideal_cycle_time_seconds"])
+        if cycle <= 0:
+            raise ValueError(
+                f"Invalid ideal cycle time for {product['product_id']}"
+            )
+
+    breaks_by_shift = defaultdict(list)
+
+    for item in planned_breaks:
+        start = parse_time(item["start_time"])
+        end = parse_time(item["end_time"])
+
+        if end <= start:
+            raise ValueError(
+                f"Invalid planned break interval: {item['break_id']}"
+            )
+
+        if item["shift_id"]:
+            breaks_by_shift[item["shift_id"]].append((start, end))
+
+    shift_windows = []
+    shift_by_id = {}
+
+    for shift in shifts:
+        start = parse_time(shift["start_time"])
+        end = start + timedelta(hours=SHIFT_HOURS)
+
+        item = {
+            "shift_id": shift["shift_id"],
+            "shift_date": shift["shift_date"],
+            "start": start,
+            "end": end,
+        }
+        shift_windows.append(item)
+        shift_by_id[item["shift_id"]] = item
+
+    event_intervals = defaultdict(list)
+    running_intervals = defaultdict(list)
+
+    for event in events:
+        machine_id = event["machine_id"]
+
+        if machine_id not in machine_by_id:
+            continue
+
+        start = parse_time(event["start_time"])
+        end = parse_time(event["end_time"])
+
+        if end <= start:
+            continue
+
+        event_intervals[machine_id].append((start, end))
+
+        if event["state"].upper() == "RUNNING":
+            running_intervals[machine_id].append((start, end))
+
+    production = defaultdict(
+        lambda: {
+            "total_count": 0,
+            "good_count": 0,
+            "scrap_count": 0,
+            "ideal_production_seconds": 0.0,
+            "invalid_count_records": 0,
+        }
+    )
+
+    for count in counts:
+        order = order_by_id.get(count["order_id"])
+
+        if order is None:
+            continue
+
+        machine_id = count["machine_id"]
+        product_id = count["product_id"]
+        shift_id = count["shift_id"]
+
+        if (
+            machine_id not in machine_by_id
+            or product_id not in product_by_id
+            or shift_id not in shift_by_id
+        ):
+            continue
+
+        values = production[(machine_id, shift_id)]
+
+        if (
+            order["machine_id"] != machine_id
+            or order["product_id"] != product_id
+        ):
+            values["invalid_count_records"] += 1
+            continue
+
+        try:
+            total = int(count["total_count"])
+            good = int(count["good_count"])
+            scrap = int(count["scrap_count"])
+        except (ValueError, KeyError):
+            values["invalid_count_records"] += 1
+            continue
+
+        if (
+            min(total, good, scrap) < 0
+            or good + scrap != total
+        ):
+            values["invalid_count_records"] += 1
+            continue
+
+        cycle = float(
+            product_by_id[product_id]["ideal_cycle_time_seconds"]
+        )
+
+        values["total_count"] += total
+        values["good_count"] += good
+        values["scrap_count"] += scrap
+        values["ideal_production_seconds"] += cycle * total
+
+    shift_report = []
+    complete_shift_keys = set()
+
+    for machine_id, machine in machine_by_id.items():
+        for shift in shift_windows:
+            shift_id = shift["shift_id"]
+            key = (machine_id, shift_id)
+            start = shift["start"]
+            end = shift["end"]
+
+            full_shift_seconds = (end - start).total_seconds()
+            breaks = breaks_by_shift.get(shift_id, [])
+            planned_seconds = net_planned_seconds(start, end, breaks)
+
+            coverage_seconds = union_seconds_in_window(
+                event_intervals[machine_id], start, end
+            )
+
+            # Subtract planned breaks from runtime as well.
+            break_runtime_seconds = union_seconds_in_window(
+                running_intervals[machine_id], start, end
+            )
+            runtime_during_break = 0.0
+
+            for break_start, break_end in breaks:
+                runtime_during_break += union_seconds_in_window(
+                    running_intervals[machine_id],
+                    max(start, break_start),
+                    min(end, break_end),
+                )
+
+            run_seconds = max(
+                0.0, break_runtime_seconds - runtime_during_break
+            )
+
+            coverage_complete = (
+                coverage_seconds >= full_shift_seconds
+            )
+
+            values = production[key]
+            total = values["total_count"]
+            good = values["good_count"]
+            scrap = values["scrap_count"]
+
+            counts_valid = values["invalid_count_records"] == 0
+            metrics_available = coverage_complete and counts_valid
+
+            if metrics_available:
+                metrics = calculate_metrics(
+                    planned_seconds,
+                    run_seconds,
+                    total,
+                    good,
+                    values["ideal_production_seconds"],
+                )
+                complete_shift_keys.add(key)
+
+                status = (
+                    "check_performance_above_100_percent"
+                    if metrics["performance"] > 1
+                    else "calculated"
+                )
+            else:
+                metrics = {
+                    "availability": None,
+                    "performance": None,
+                    "quality": None,
+                    "oee": None,
+                }
+
+                if not coverage_complete and not counts_valid:
+                    status = "incomplete_data_and_invalid_counts"
+                elif not coverage_complete:
+                    status = "incomplete_data"
+                else:
+                    status = "invalid_count_data"
+
+            shift_report.append({
+                "machine_id": machine_id,
+                "line_id": machine["line_id"],
+                "shift_id": shift_id,
+                "shift_date": shift["shift_date"],
+                "shift_duration_seconds": full_shift_seconds,
+                "planned_break_seconds": round(
+                    full_shift_seconds - planned_seconds, 2
+                ),
+                "planned_time_seconds": planned_seconds,
+                "event_coverage_seconds": round(coverage_seconds, 2),
+                "coverage_percent": round(
+                    100 * coverage_seconds / full_shift_seconds, 2
+                ) if full_shift_seconds else 0.0,
+                "run_time_seconds": round(run_seconds, 2),
+                "total_count": total,
+                "good_count": good,
+                "scrap_count": scrap,
+                "invalid_count_records": values["invalid_count_records"],
+                **metrics,
+                "oee_status": status,
+            })
+
+    machine_report = []
+
+    for machine_id, machine in machine_by_id.items():
+        usable_rows = [
+            row for row in shift_report
+            if row["machine_id"] == machine_id
+            and (machine_id, row["shift_id"]) in complete_shift_keys
+        ]
+
+        complete_count = len(usable_rows)
+        incomplete_count = len(shift_windows) - complete_count
+
+        planned_seconds = sum(
+            row["planned_time_seconds"] for row in usable_rows
+        )
+        run_seconds = sum(
+            row["run_time_seconds"] for row in usable_rows
+        )
+        total = sum(row["total_count"] for row in usable_rows)
+        good = sum(row["good_count"] for row in usable_rows)
+        scrap = sum(row["scrap_count"] for row in usable_rows)
+
+        ideal_seconds = sum(
+            production[(machine_id, row["shift_id"])][
+                "ideal_production_seconds"
+            ]
+            for row in usable_rows
+        )
+
+        if complete_count:
+            metrics = calculate_metrics(
+                planned_seconds, run_seconds, total, good, ideal_seconds
+            )
+            status = (
+                "partial_coverage_complete_shifts_only"
+                if incomplete_count
+                else "calculated"
+            )
+
+            if metrics["performance"] > 1:
+                status = "check_performance_above_100_percent"
+        else:
+            metrics = {
+                "availability": None,
+                "performance": None,
+                "quality": None,
+                "oee": None,
+            }
+            status = "unavailable_no_complete_shifts"
+
+        machine_report.append({
+            "machine_id": machine_id,
+            "line_id": machine["line_id"],
+            "complete_shift_count": complete_count,
+            "incomplete_or_invalid_shift_count": incomplete_count,
+            "planned_time_seconds": planned_seconds,
+            "run_time_seconds": round(run_seconds, 2),
+            "total_count": total,
+            "good_count": good,
+            "scrap_count": scrap,
+            **metrics,
+            "oee_status": status,
+        })
+
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+
+    outputs = {
+        "oee_by_machine_shift.json": shift_report,
+        "oee_by_machine.json": machine_report,
+    }
+
+    for filename, records in outputs.items():
+        with (PROCESSED_DIR / filename).open(
+            "w", encoding="utf-8"
+        ) as file:
+            json.dump(records, file, indent=2)
+
+    status_counts = defaultdict(int)
+    for row in shift_report:
+        status_counts[row["oee_status"]] += 1
+
+    print("===== OEE REPORT =====")
+    print("Machines:", len(machines))
+    print("Shifts:", len(shifts))
+    print("Machine-shift rows:", len(shift_report))
+    print("Machine-level rows:", len(machine_report))
+    print("Shift status summary:")
+
+    for status, count in sorted(status_counts.items()):
+        print(f"  {status}: {count}")
+
+    print("Note: shifts assume 8-hour duration.")
+    print("Note: planned breaks are deducted from planned time.")
+    print("Note: performance above 100% requires investigation.")
+
+    for filename in outputs:
+        print("Saved:", PROCESSED_DIR / filename)
+
+
+if __name__ == "__main__":
+    configure_directories()
+    main()

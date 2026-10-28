@@ -1,0 +1,104 @@
+
+import argparse
+import csv
+import random
+from datetime import datetime, timedelta
+from pathlib import Path
+
+SEED = 20261022
+TARGET_EVENTS = 99_999
+DEFAULT_DATA_DIR = Path("data/raw")
+
+WINDOW_START = datetime(2026, 1, 1, 6, 0, 0)
+WINDOW_END = datetime(2026, 4, 1, 6, 0, 0)
+
+
+def read_csv(data_dir, filename):
+    with (data_dir / filename).open(
+        "r", newline="", encoding="utf-8"
+    ) as file:
+        return list(csv.DictReader(file))
+
+
+def generate_events(data_dir, target_events=TARGET_EVENTS):
+    rng = random.Random(SEED)
+    machines = read_csv(data_dir, "machines.csv")
+
+    if not machines:
+        raise ValueError("No machines found.")
+
+    if target_events < len(machines):
+        raise ValueError("Target events must be at least the machine count.")
+
+    base_count, remainder = divmod(target_events, len(machines))
+    events = []
+    total_seconds = int((WINDOW_END - WINDOW_START).total_seconds())
+
+    for machine_index, machine in enumerate(machines):
+        machine_id = machine["machine_id"]
+        event_count = base_count + (
+            1 if machine_index < remainder else 0
+        )
+
+        # Spread event start times across the full 90-day window.
+        for i in range(1, event_count + 1):
+            fraction = (i - 1) / max(event_count - 1, 1)
+            offset_seconds = int(fraction * total_seconds)
+            start = WINDOW_START + timedelta(seconds=offset_seconds)
+
+            duration_minutes = rng.randint(5, 30)
+            duration = timedelta(minutes=duration_minutes)
+
+            latest_start = WINDOW_END - duration
+            start = min(start, latest_start)
+            end = start + duration
+            state = rng.choices(
+                ["RUNNING", "IDLE", "STOPPED"],
+                weights=[75, 10, 15],
+                k=1,
+            )[0]
+
+            events.append({
+                "event_id": f"EVT-{machine_id}-{i:06d}",
+                "machine_id": machine_id,
+                "state": state,
+                "start_time": start.isoformat(),
+                "end_time": end.isoformat(),
+            })
+
+    events.sort(key=lambda row: (row["machine_id"], row["start_time"]))
+
+    output_file = data_dir / "state_events.csv"
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    fields = [
+        "event_id", "machine_id", "state", "start_time", "end_time"
+    ]
+
+    with output_file.open(
+        "w", newline="", encoding="utf-8"
+    ) as file:
+        writer = csv.DictWriter(file, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(events)
+
+    print(f"Machines: {len(machines)}")
+    print(f"State events generated: {len(events)}")
+    print(f"Random seed: {SEED}")
+    print(f"Window: {WINDOW_START} to {WINDOW_END}")
+    print(f"Saved to: {output_file.resolve()}")
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--data-dir",
+        default=str(DEFAULT_DATA_DIR),
+        help="Folder containing machines.csv and receiving state_events.csv",
+    )
+    args = parser.parse_args()
+    generate_events(Path(args.data_dir))
+
+
+if __name__ == "__main__":
+    main()

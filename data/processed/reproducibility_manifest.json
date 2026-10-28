@@ -1,0 +1,52 @@
+{
+  "plants.csv": {
+    "exists": true,
+    "rows": 1,
+    "sha256": "1e74f3d853c47e51fb5d875d0c598616558260762dac07a69f7bbef469efbcd4"
+  },
+  "lines.csv": {
+    "exists": true,
+    "rows": 5,
+    "sha256": "e08c49dfa4678b05e3c7ac4c21be45ff31102c94fbb927bdaff127271c6371e7"
+  },
+  "machines.csv": {
+    "exists": true,
+    "rows": 30,
+    "sha256": "968271369b1ae9f4d5e6db3f352a17b7172ea26e0b82275453ceff9eacdfe4df"
+  },
+  "products.csv": {
+    "exists": true,
+    "rows": 20,
+    "sha256": "375aef1ba4cf60ad49053b6ddbff0d49ef5fc7c632195fa0a61de5334ccc90e5"
+  },
+  "shifts.csv": {
+    "exists": true,
+    "rows": 270,
+    "sha256": "16f610de4ebf52489ff5dbe3b35273b53bd16418e683d988c183b88f77f54a35"
+  },
+  "production_orders.csv": {
+    "exists": true,
+    "rows": 1000,
+    "sha256": "3849cfc266723efd1109612bba9e21753937dc53e653e3077d88a680fbc198ad"
+  },
+  "state_events.csv": {
+    "exists": true,
+    "rows": 100000,
+    "sha256": "03fac19f2b03c4c10cd55de07a7791ca14ea3bf6d408730f3ac33f212a4c9588"
+  },
+  "production_counts.csv": {
+    "exists": true,
+    "rows": 500003,
+    "sha256": "25972fa44cc15362704305833e0a2fae654708589c2b9aeb1efa165e1f478568"
+  },
+  "quality_inspections.csv": {
+    "exists": true,
+    "rows": 500000,
+    "sha256": "7be8207da1fbbe612de367f484c27e2413ae8336edaba5ff8e6cc41acdc49e3a"
+  },
+  "planned_breaks.csv": {
+    "exists": true,
+    "rows": 270,
+    "sha256": "041dbf359a4f9a0b597610c1d7be7d855e50843db610191e81ce0c8e059a2712"
+  }
+}
